@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Client Index</title>
+
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+<style>
+:root{
+  --bg:#0b0f14;--card:#121826;--text:#e8eefc;--muted:#9fb0d0;
+  --line:#22304a;--btn:#2b66f6;--danger:#ff4d4d
+}
+*{box-sizing:border-box;font-family:system-ui}
+body{margin:0;background:var(--bg);color:var(--text)}
+header{padding:16px;border-bottom:1px solid var(--line)}
+main{max-width:1200px;margin:auto;padding:16px;display:grid;gap:14px}
+.row{display:grid;grid-template-columns:1fr}
+@media(min-width:980px){.row{grid-template-columns:420px 1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+label{font-size:12px;color:var(--muted);margin-top:8px;display:block}
+input,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:#0f1420;color:var(--text)}
+textarea{min-height:80px}
+button{border:0;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer}
+.primary{background:var(--btn);color:white}
+.secondary{background:#23314d;color:var(--text)}
+.danger{background:var(--danger);color:white}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.inline{display:flex;gap:8px;align-items:center}
+.inline input{flex:1}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:top}
+th{color:var(--muted);text-align:left}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.small{padding:6px 10px;font-size:12px}
+.meta{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.4}
+a{color:inherit}
+.hidden{display:none !important}
+
+/* Login overlay */
+#loginOverlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.65);
+  display:flex;align-items:center;justify-content:center;padding:16px;z-index:9999
+}
+#loginBox{max-width:520px;width:100%}
+</style>
+</head>
+
+<body>
+<header>
+  <h2>Client Index (Google Sheets)</h2>
+</header>
+
+<!-- LOGIN OVERLAY -->
+<div id="loginOverlay" class="hidden">
+  <div id="loginBox" class="card">
+    <h3 style="margin:0 0 10px 0;">Login</h3>
+
+    <label for="loginUrl">Apps Script Web App URL</label>
+    <input id="loginUrl" placeholder="https://script.google.com/macros/s/.../exec" />
+
+    <label for="loginKey">Password</label>
+    <input id="loginKey" type="password" placeholder="Enter your secret password" />
+
+    <div class="btns">
+      <button class="primary" id="loginBtn" type="button">Login</button>
+    </div>
+
+    <div class="meta" id="loginStatus"></div>
+    <div class="meta" style="margin-top:8px;">
+      URL + password are saved in this browser.
+    </div>
+  </div>
+</div>
+
+<main class="row hidden" id="appUI">
+<section class="card">
+  <label for="apiUrl">Apps Script Web App URL (saved)</label>
+  <input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec">
+
+  <div class="btns">
+    <button class="secondary" id="reloadBtn" type="button">Reload Clients</button>
+    <button class="secondary" id="exportPdfBtn" type="button">Export PDF</button>
+    <button class="secondary" id="logoutBtn" type="button">Logout</button>
+  </div>
+
+  <hr style="border-color:var(--line);margin:14px 0">
+
+  <form id="form" autocomplete="off">
+    <label for="clientId">Customer ID *</label>
+    <div class="inline">
+      <input id="clientId" required placeholder="Auto-generated or type your own">
+      <button class="secondary small" id="genIdBtn" type="button">Generate</button>
+    </div>
+
+    <label for="name">Name *</label>
+    <input id="name" required placeholder="e.g., Mark">
+
+    <label for="company">Company</label>
+    <input id="company">
+
+    <label for="phone">Phone</label>
+    <input id="phone">
+
+    <label for="email">Email</label>
+    <input id="email">
+
+    <label for="notes">Notes</label>
+    <textarea id="notes"></textarea>
+
+    <div class="btns">
+      <button class="primary" id="saveBtn" type="submit">Save to Sheets</button>
+      <button type="button" class="secondary" id="resetBtn">Reset</button>
+    </div>
+  </form>
+
+  <div class="meta" id="status"></div>
+</section>
+
+<section class="card">
+  <input id="search" placeholder="Search (ID, name, company, phone, email, notes)..." style="margin-bottom:10px">
+  <table id="table">
+    <thead>
+      <tr>
+        <th>ID</th><th>Name</th><th>Company</th><th>Phone</th><th>Email</th><th>Notes</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="meta" id="countMeta"></div>
+</section>
+</main>
+
+<script>
+  // ===== Storage keys =====
+  const URL_KEY = "client_app_url_v4";
+  const AUTH_KEY_STORAGE = "client_app_authkey_v4";
+
+  // ===== Elements =====
+  const loginOverlay = document.getElementById("loginOverlay");
+  const loginUrl = document.getElementById("loginUrl");
+  const loginKey = document.getElementById("loginKey");
+  const loginBtn = document.getElementById("loginBtn");
+  const loginStatus = document.getElementById("loginStatus");
+
+  const appUI = document.getElementById("appUI");
+  const apiUrl = document.getElementById("apiUrl");
+  const reloadBtn = document.getElementById("reloadBtn");
+  const exportPdfBtn = document.getElementById("exportPdfBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+
+  const form = document.getElementById("form");
+  const saveBtn = document.getElementById("saveBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const genIdBtn = document.getElementById("genIdBtn");
+  const status = document.getElementById("status");
+
+  const clientId = document.getElementById("clientId");
+  const name = document.getElementById("name");
+  const company = document.getElementById("company");
+  const phone = document.getElementById("phone");
+  const email = document.getElementById("email");
+  const notes = document.getElementById("notes");
+
+  const search = document.getElementById("search");
+  const tbody = document.getElementById("tbody");
+  const countMeta = document.getElementById("countMeta");
+
+  // ===== State =====
+  let clients = [];
+
+  function setStatus(msg){ status.textContent = msg || ""; }
+  function setLoginStatus(msg){ loginStatus.textContent = msg || ""; }
+
+  function setBusy(b){
+    saveBtn.disabled = b;
+    reloadBtn.disabled = b;
+    exportPdfBtn.disabled = b;
+    logoutBtn.disabled = b;
+    loginBtn.disabled = b;
+    genIdBtn.disabled = b;
+  }
+
+  function getAuthKey(){ return (localStorage.getItem(AUTH_KEY_STORAGE) || "").trim(); }
+  function getUrl(){ return (apiUrl.value || "").trim(); }
+
+  function apiGetUrlWithKey(){
+    const u = getUrl();
+    const k = getAuthKey();
+    if(!u) throw new Error("Missing Web App URL");
+    if(!k) throw new Error("Missing password");
+    const join = u.includes("?") ? "&" : "?";
+    return u + join + "key=" + encodeURIComponent(k);
+  }
+
+  function esc(s){
+    return String(s ?? "").replace(/[&<>"']/g, ch => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[ch]));
+  }
+
+  function matches(c, q){
+    if(!q) return true;
+    return Object.values(c).join(" ").toLowerCase().includes(q);
+  }
+
+  // ===== Customer ID generator =====
+  // Format: C-YYYYMMDD-#### (e.g., C-20251230-4821)
+  function makeCustomerId(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    const rnd = String(Math.floor(Math.random()*9000) + 1000);
+    return `C-${y}${m}${day}-${rnd}`;
+  }
+
+  function generateUniqueId(){
+    let id;
+    const existing = new Set(clients.map(c => String(c.clientId || "").toLowerCase()));
+    do { id = makeCustomerId(); } while(existing.has(id.toLowerCase()));
+    return id;
+  }
+
+  function render(){
+    const q = search.value.trim().toLowerCase();
+    const visible = clients.filter(c => matches(c, q));
+
+    tbody.innerHTML = "";
+
+    for(const c of visible){
+      const tr = document.createElement("tr");
+
+      const tdId = document.createElement("td");
+      tdId.innerHTML = `<strong>${esc(c.clientId)}</strong>`;
+
+      const tdName = document.createElement("td");
+      tdName.textContent = c.name || "";
+
+      const tdCompany = document.createElement("td");
+      tdCompany.textContent = c.company || "";
+
+      const tdPhone = document.createElement("td");
+      tdPhone.textContent = c.phone || "";
+
+      const tdEmail = document.createElement("td");
+      if (c.email) {
+        const a = document.createElement("a");
+        a.href = `mailto:${c.email}`;
+        a.textContent = c.email;
+        tdEmail.appendChild(a);
+      } else {
+        tdEmail.textContent = "";
+      }
+
+      const tdNotes = document.createElement("td");
+      tdNotes.textContent = c.notes || "";
+
+      const tdActions = document.createElement("td");
+      tdActions.className = "actions";
+
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "secondary small";
+      editBtn.textContent = "Edit";
+      editBtn.dataset.edit = c.clientId; // RAW ID
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "danger small";
+      delBtn.textContent = "Del";
+      delBtn.dataset.del = c.clientId; // RAW ID
+
+      tdActions.appendChild(editBtn);
+      tdActions.appendChild(delBtn);
+
+      tr.append(tdId, tdName, tdCompany, tdPhone, tdEmail, tdNotes, tdActions);
+      tbody.appendChild(tr);
+    }
+
+    countMeta.textContent = `Showing ${visible.length} of ${clients.length} clients`;
+  }
+
+  async function loadClients(){
+    setStatus("Loading...");
+    const r = await fetch(apiGetUrlWithKey(), { method:"GET" });
+    const j = await r.json().catch(()=> ({}));
+    if(!j.ok) throw new Error(j.error || "Load failed");
+    clients = j.data || [];
+    render();
+    setStatus("Loaded " + clients.length + " clients.");
+  }
+
+  async function saveClient(data){
+    data.authKey = getAuthKey();
+    const r = await fetch(getUrl(), {
+      method:"POST",
+      headers:{ "Content-Type":"text/plain;charset=utf-8" }, // avoid CORS preflight
+      body: JSON.stringify(data)
+    });
+    const j = await r.json().catch(()=> ({}));
+    if(!j.ok) throw new Error(j.error || "Save failed");
+  }
+
+  async function deleteClient(id){
+    const r = await fetch(getUrl(), {
+      method:"POST",
+      headers:{ "Content-Type":"text/plain;charset=utf-8" },
+      body: JSON.stringify({ _method:"DELETE", clientId:id, authKey:getAuthKey() })
+    });
+    const j = await r.json().catch(()=> ({}));
+    if(!j.ok) throw new Error(j.error || "Delete failed");
+  }
+
+  function resetForm(){
+    form.reset();
+    // auto-generate a new ID for convenience
+    clientId.value = generateUniqueId();
+    clientId.focus();
+  }
+
+  // ===== PDF Export: Black & White + remove Actions column =====
+  function exportPDF(){
+    setStatus("Preparing PDF...");
+
+    const originalTable = document.getElementById("table");
+    const clone = originalTable.cloneNode(true);
+
+    // Remove last column (Actions) from all rows
+    clone.querySelectorAll("tr").forEach(row => {
+      if (row.children.length) row.removeChild(row.lastElementChild);
+    });
+
+    // Wrap with print styling (black/white)
+    const wrapper = document.createElement("div");
+    wrapper.style.background = "#ffffff";
+    wrapper.style.color = "#000000";
+    wrapper.style.padding = "10px";
+
+    const title = document.createElement("div");
+    title.style.fontFamily = "Arial, sans-serif";
+    title.style.fontSize = "14px";
+    title.style.fontWeight = "bold";
+    title.style.marginBottom = "8px";
+    title.textContent = "Client List";
+
+    const style = document.createElement("style");
+    style.innerHTML = `
+      table { width:100%; border-collapse:collapse; font-family: Arial, sans-serif; }
+      th, td { border:1px solid #000; padding:6px; font-size:11px; color:#000; vertical-align:top; }
+      th { background:#f0f0f0; font-weight:bold; }
+      a { color:#000; text-decoration:none; }
+    `;
+
+    wrapper.appendChild(style);
+    wrapper.appendChild(title);
+    wrapper.appendChild(clone);
+
+    const filename = `clients-${new Date().toISOString().slice(0,10)}.pdf`;
+
+    html2pdf()
+      .set({
+        filename,
+        margin: 10,
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: "mm", format: "a4", orientation: "landscape" }
+      })
+      .from(wrapper)
+      .save()
+      .then(() => setStatus("PDF exported (black & white, no actions)."))
+      .catch(err => setStatus("PDF export error: " + (err.message || err)));
+  }
+
+  // ===== Events =====
+  search.addEventListener("input", render);
+
+  reloadBtn.addEventListener("click", async () => {
+    try{ setBusy(true); await loadClients(); }
+    catch(err){ setStatus("Error: " + (err.message || err)); }
+    finally{ setBusy(false); }
+  });
+
+  exportPdfBtn.addEventListener("click", exportPDF);
+
+  genIdBtn.addEventListener("click", () => {
+    clientId.value = generateUniqueId();
+    clientId.focus();
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try{
+      setBusy(true);
+      setStatus("Saving...");
+
+      const data = {
+        clientId: clientId.value.trim(),
+        name: name.value.trim(),
+        company: company.value.trim(),
+        phone: phone.value.trim(),
+        email: email.value.trim(),
+        notes: notes.value.trim()
+      };
+
+      if(!data.clientId || !data.name){
+        setStatus("Customer ID and Name are required.");
+        return;
+      }
+
+      await saveClient(data);
+      await loadClients();
+      resetForm();
+      setStatus("Saved.");
+    }catch(err){
+      setStatus("Error: " + (err.message || err));
+    }finally{
+      setBusy(false);
+    }
+  });
+
+  resetBtn.addEventListener("click", resetForm);
+
+  // Edit/Delete handler on tbody (reliable)
+  tbody.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button");
+    if(!btn) return;
+
+    const editId = btn.dataset.edit;
+    const delId = btn.dataset.del;
+
+    if(editId){
+      const c = clients.find(x => String(x.clientId).toLowerCase() === String(editId).toLowerCase());
+      if(!c) { setStatus("Client not found for edit."); return; }
+
+      clientId.value = c.clientId || "";
+      name.value = c.name || "";
+      company.value = c.company || "";
+      phone.value = c.phone || "";
+      email.value = c.email || "";
+      notes.value = c.notes || "";
+      setStatus("Editing — Save will update this client.");
+      clientId.focus();
+    }
+
+    if(delId){
+      if(!confirm("Delete client " + delId + "?")) return;
+      try{
+        setBusy(true);
+        setStatus("Deleting...");
+        await deleteClient(delId);
+        await loadClients();
+        setStatus("Deleted.");
+      }catch(err){
+        setStatus("Error: " + (err.message || err));
+      }finally{
+        setBusy(false);
+      }
+    }
+  });
+
+  logoutBtn.addEventListener("click", () => {
+    localStorage.removeItem(AUTH_KEY_STORAGE);
+    showLogin_();
+  });
+
+  // ===== Login flow =====
+  async function tryLogin_(url, key){
+    localStorage.setItem(URL_KEY, url.trim());
+    localStorage.setItem(AUTH_KEY_STORAGE, key.trim());
+
+    apiUrl.value = url.trim();
+
+    // test load
+    await loadClients();
+  }
+
+  function showLogin_(){
+    appUI.classList.add("hidden");
+    loginOverlay.classList.remove("hidden");
+    loginUrl.value = localStorage.getItem(URL_KEY) || "";
+    loginKey.value = "";
+    setLoginStatus("");
+  }
+
+  function showApp_(){
+    loginOverlay.classList.add("hidden");
+    appUI.classList.remove("hidden");
+  }
+
+  loginBtn.addEventListener("click", async () => {
+    try{
+      setBusy(true);
+      setLoginStatus("Logging in...");
+      const url = loginUrl.value.trim();
+      const key = loginKey.value.trim();
+      if(!url || !key){ setLoginStatus("URL and Password are required."); return; }
+      await tryLogin_(url, key);
+      showApp_();
+      setLoginStatus("");
+      // initialize a new ID for convenience
+      clientId.value = generateUniqueId();
+    }catch(err){
+      setLoginStatus("Login failed: " + (err.message || err));
+    }finally{
+      setBusy(false);
+    }
+  });
+
+  // ===== Init =====
+  (async function init(){
+    const savedUrl = (localStorage.getItem(URL_KEY) || "").trim();
+    const savedKey = (localStorage.getItem(AUTH_KEY_STORAGE) || "").trim();
+
+    if(savedUrl) apiUrl.value = savedUrl;
+
+    if(savedUrl && savedKey){
+      try{
+        setBusy(true);
+        await loadClients();
+        showApp_();
+        // auto-generate ID
+        clientId.value = generateUniqueId();
+      }catch(err){
+        showLogin_();
+        setLoginStatus("Saved login failed. Please login again.");
+      }finally{
+        setBusy(false);
+      }
+    }else{
+      showLogin_();
+    }
+  })();
+</script>
+</body>
+</html>
