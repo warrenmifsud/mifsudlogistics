@@ -4,67 +4,8 @@
 
   
 
-  <!-- ===== KPI / Info Boxes (safe to add more) ===== -->
-  <section class="mifsud-kpis" aria-label="How it works">
-    <div class="mifsud-kpis-inner">
   
-      <!-- KPI BOX (duplicate this .mifsud-kpi block to add more KPIs safely) -->
-      <div class="mifsud-kpi mifsud-kpi-hover" tabindex="0" aria-label="Buy from Sicily">
-      <div class="mifsud-kpi-tooltip">
-        Buy from stores or websites in Sicily that do not ship directly to Malta.
-      </div>
-        <div class="mifsud-kpi-icon" aria-hidden="true">
-          <!-- Simple inline icon -->
-          <svg viewBox="0 0 24 24" width="18" height="18">
-            <path fill="currentColor" d="M21 7.5 12 2 3 7.5V16.5L12 22l9-5.5V7.5zM12 4.3 18.6 8 12 11.7 5.4 8 12 4.3z"/>
-          </svg>
-        </div>
-        <div class="mifsud-kpi-body">
-          <div class="mifsud-kpi-title">Buy from Sicily</div>
-          
-        </div>
-      </div>
-  
-      <!-- Add more KPI boxes by copying the .mifsud-kpi block above -->
-  
-    
-    <div class="mifsud-kpi" role="button" tabindex="0" aria-label="Learn more: Sicily Hub Delivery Address" data-kpi="sicily-hub">
-      <div class="mifsud-kpi-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18">
-          <path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/>
-        </svg>
-      </div>
-      <div class="mifsud-kpi-body">
-        <div class="mifsud-kpi-title">Sicily Hub Delivery Address</div>
-        
-      </div>
-    </div>
-
-    <div class="mifsud-kpi" tabindex="0" aria-label="Deliver to Malta Hub">
-      <div class="mifsud-kpi-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18">
-          <path fill="currentColor" d="M20 8h-3V4H7v4H4v12h16V8zm-9-2h2v2h-2V6zm7 12H6v-8h12v8z"/>
-        </svg>
-      </div>
-      <div class="mifsud-kpi-body">
-        <div class="mifsud-kpi-title">Deliver to Malta Hub</div>
-      </div>
-    </div>
-
-    <div class="mifsud-kpi" tabindex="0" aria-label="Deliver to your address">
-      <div class="mifsud-kpi-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18">
-          <path fill="currentColor" d="M12 3 2 12h3v7h6v-5h2v5h6v-7h3L12 3z"/>
-        </svg>
-      </div>
-      <div class="mifsud-kpi-body">
-        <div class="mifsud-kpi-title">Deliver to your address</div>
-      </div>
-    </div>
-</div>
-  </section>
-
-<div class="mifsud-headline">
+  <div class="mifsud-headline">
     Shop and Drop to our warehouse.
   </div>
 
@@ -1417,6 +1358,68 @@
   .mifsud-kpi:hover{ transform: none; }
 
   /* Tooltip: show below card on mobile */
+  .mifsud-kpi-tooltip{
+    top: calc(100% + 10px);
+    bottom: auto;
+  }
+}
+
+
+/* ===== FINAL MOBILE FIX: show FULL background image (no crop) ===== */
+@media (max-width: 600px){
+  #mifsud-shipping-calculator .mifsud-bg{
+    position: absolute !important; /* iOS-friendly: avoids fixed crop/jank */
+    inset: 0 !important;
+    background-size: contain !important;   /* no cropping */
+    background-position: center 12% !important;
+    background-repeat: no-repeat !important;
+    background-color: #0e1418 !important;  /* letterbox fill */
+  }
+
+  #mifsud-shipping-calculator{
+    min-height: 100svh !important;
+  }
+
+  #mifsud-shipping-calculator .mifsud-overlay{
+    background: rgba(0,0,0,.26) !important;
+  }
+}
+
+/* ===== FINAL MOBILE KPI: clean swipe carousel (no messy wrapping) ===== */
+@media (max-width: 600px){
+  .mifsud-kpis{
+    width: 100%;
+    padding: 0 10px;
+    margin: 0 auto 12px;
+  }
+
+  .mifsud-kpis-inner{
+    display: flex !important;
+    gap: 10px !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 2px 10px;
+    max-width: 100% !important;
+  }
+
+  .mifsud-kpis-inner::-webkit-scrollbar{ height: 0; }
+
+  .mifsud-kpi{
+    flex: 0 0 86vw;
+    width: 86vw !important;
+    max-width: 86vw !important;
+    scroll-snap-align: center;
+    border-radius: 16px;
+    padding: 14px 14px;
+    background: rgba(235,235,235,.82);
+    box-shadow: 0 10px 22px rgba(0,0,0,.10);
+  }
+
+  .mifsud-kpi:hover{ transform: none; }
+
+  /* Tooltip stays usable on mobile (appears below) */
   .mifsud-kpi-tooltip{
     top: calc(100% + 10px);
     bottom: auto;
